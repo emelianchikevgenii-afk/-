@@ -1,0 +1,672 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="theme-color" content="#0b1020" />
+  <meta name="description" content="Камнепад — 55 ходов на раунд: собирай группы от трёх камней, запускай комбо и бей рекорды." />
+  <title>Камнепад — Telegram Mini App</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #151d32;
+      --panel-2: #1c2741;
+      --line: rgba(255,255,255,.09);
+      --muted: #929fbb;
+      --text: #f5f7ff;
+      --accent: #72e2c8;
+      --shadow: 0 24px 65px rgba(0,0,0,.36);
+    }
+    /* Telegram exports CSS safe-area values; in a normal browser these default to zero. */
+    *, *::before, *::after { box-sizing: border-box; }
+    html { min-height: 100%; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      background: radial-gradient(ellipse at 15% -5%, rgba(110,89,219,.18), transparent 42%),
+                  radial-gradient(ellipse at 100% 75%, rgba(56,191,192,.12), transparent 45%), var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.4;
+      overflow-x: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    button { font: inherit; cursor: pointer; }
+    button:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+    .page {
+      width: min(100% - 28px, 485px);
+      margin: 0 auto;
+      padding-top: max(20px, env(safe-area-inset-top, 0px), var(--tg-content-safe-area-inset-top, 0px));
+      padding-bottom: max(28px, env(safe-area-inset-bottom, 0px), var(--tg-content-safe-area-inset-bottom, 0px));
+    }
+    .topbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .brand { display:flex; align-items: center; gap: 11px; min-width: 0; }
+    .mark {
+      width: 41px; height: 41px; flex: 0 0 41px;
+      border-radius: 13px; display:grid; place-items:center;
+      background: linear-gradient(145deg, #8c7aff, #5a59b8 55%, #46407b);
+      box-shadow: 0 6px 22px rgba(108,91,225,.25), inset 0 1px 0 rgba(255,255,255,.24);
+    }
+    .mark svg { width:23px; filter: drop-shadow(0 2px 3px rgba(25,20,65,.45)); }
+    .brand-name { font-weight:850; font-size:18px; letter-spacing:.075em; line-height:1.05; }
+    .brand-sub { font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:var(--muted); margin-top:5px; }
+    .icon-button {
+      border:1px solid var(--line); background: rgba(255,255,255,.045);
+      height:41px; width:41px; display:grid;place-items:center; color:#dfe7fa;
+      border-radius:13px; transition:transform .16s, background .16s;
+    }
+    .icon-button:active, .pill-button:active, .main-button:active { transform:scale(.96); }
+    .icon-button svg { width:19px; height:19px; stroke:currentColor; stroke-width:2; fill:none; stroke-linecap:round; stroke-linejoin:round; }
+    .intro { display:flex; justify-content:space-between; gap:12px; align-items:end; margin: 30px 0 18px; }
+    h1 { font-size:clamp(25px,7vw,32px); line-height:1.08; margin:0 0 6px; letter-spacing:-.042em; font-weight:800; }
+    .subtitle { margin:0; color:var(--muted); font-size:13px; }
+    .help-button { background:transparent;border:0;color:var(--accent);font-size:12px;font-weight:700;padding:10px 0 4px 10px;white-space:nowrap; }
+    .scores { display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:9px;margin-bottom:14px; }
+    .score-card { border:1px solid var(--line);border-radius:17px;background:rgba(255,255,255,.045);padding:13px 13px 11px;min-width:0; }
+    .score-card.primary { background:linear-gradient(135deg,rgba(105,225,194,.16),rgba(105,225,194,.035));border-color:rgba(114,226,200,.25); }
+    .score-label { font-size:10px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-weight:700; }
+    .score-value { font-size:clamp(19px,5.5vw,26px);font-weight:800;letter-spacing:-.045em;line-height:1.25;margin-top:3px;font-variant-numeric:tabular-nums; }
+    .score-card.primary .score-value { color: #8cf3d5; }
+    .board-panel { position:relative; border:1px solid rgba(255,255,255,.1);padding:12px; border-radius:24px;background:linear-gradient(155deg,rgba(34,46,78,.94),rgba(17,26,47,.97));box-shadow:var(--shadow); }
+    .board-caption { display:flex;align-items:center;justify-content:space-between;gap:10px;margin:2px 4px 12px; }
+    .board-caption span { color: #aab7d0;font-size:12px; }
+    .progress { height:5px; width:98px; background:rgba(255,255,255,.11);border-radius:99px;overflow:hidden; }
+    .progress > span { display:block;height:100%;width:100%;background:linear-gradient(90deg,#77e7cd,#8da9fa);border-radius:inherit;transition:width .35s; }
+    .board {
+      width:100%;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:clamp(4px,1vw,6px);
+      border-radius:15px;padding:clamp(5px,1.35vw,8px);
+      background:linear-gradient(145deg,rgba(3,10,25,.58),rgba(12,21,40,.75));
+      border:1px solid rgba(255,255,255,.065);
+      touch-action:manipulation;
+    }
+    .cell {
+      position:relative;aspect-ratio:1;min-width:0;border:0;padding:0;display:grid;place-items:center;
+      background:rgba(255,255,255,.025);border-radius:clamp(5px,1.4vw,9px);
+      outline-offset:1px;
+    }
+    .gem {
+      isolation:isolate;
+      width:100%;height:100%;border-radius:clamp(5px,1.55vw,10px);
+      display:grid;place-items:center;position:relative;overflow:hidden;
+      background:linear-gradient(152deg,var(--light),var(--base) 52%,var(--dark));
+      box-shadow:inset 0 2px 0 rgba(255,255,255,.28), inset 0 -3px 0 rgba(0,0,0,.18), 0 3px 4px rgba(0,0,0,.18);
+      transition:filter .15s, transform .15s, box-shadow .15s;
+    }
+    .gem::before { content:"";position:absolute;inset:5% 9% auto 9%;height:39%;border-radius:55% 45% 40% 48%;background:linear-gradient(180deg,rgba(255,255,255,.23),transparent);pointer-events:none; }
+    .gem-symbol { color:rgba(255,255,255,.75);font-size:clamp(13px,4.8vw,24px);font-weight:800;line-height:1;text-shadow:0 2px 5px rgba(0,0,0,.16);transform:translateY(-1px); }
+    .gem.c0 { --light:#61eccc;--base:#29bba5;--dark:#15767d; }
+    .gem.c1 { --light:#91c4ff;--base:#4b8fed;--dark:#3053ab; }
+    .gem.c2 { --light:#c3aaff;--base:#9171e9;--dark:#5b48a9; }
+    .gem.c3 { --light:#ffadad;--base:#f57489;--dark:#b84472; }
+    .gem.c4 { --light:#ffe2a0;--base:#edaf51;--dark:#b57435; }
+    @media (hover:hover) { .cell:not(:disabled):hover .gem { filter:brightness(1.12); } }
+    .cell.is-preview .gem, .cell.is-hint .gem {
+      transform: translateY(-2px) scale(.94);
+      box-shadow:0 0 0 2px #fff,0 0 16px rgba(255,255,255,.35),0 5px 8px rgba(0,0,0,.3);
+      filter:brightness(1.13);
+    }
+    .cell.is-hint .gem { animation:hint 1s ease-in-out infinite alternate; }
+    .cell.pop .gem { animation: pop .22s ease-in forwards; }
+    .cell.shake .gem { animation: shake .2s ease-out; }
+    .cell.fall .gem { animation: fall .2s ease-out both; }
+    @keyframes pop {0%{transform:scale(1);opacity:1}55%{transform:scale(1.12);opacity:.75}100%{transform:scale(.2);opacity:0}}
+    @keyframes fall {from{transform:translateY(-13px);opacity:.75}to{transform:translateY(0);opacity:1}}
+    @keyframes shake {0%,100%{transform:translateX(0)}30%{transform:translateX(-3px)}70%{transform:translateX(3px)}}
+    @keyframes hint {from{transform:translateY(0) scale(.98)}to{transform:translateY(-2px) scale(.92)}}
+    .board-bottom { min-height:38px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin:7px 3px 0; }
+    .status { color:#bbc7df;font-size:12px;transition:color .18s; }
+    .combo-label {font-size:11px;color:var(--accent);font-weight:800;white-space:nowrap;}
+    .toolbar { display:grid; grid-template-columns:1fr 1fr;gap:10px;margin:14px 0; }
+    .pill-button { border:1px solid var(--line); border-radius:15px;background:rgba(255,255,255,.05);color:var(--text);padding:13px 9px;display:flex;align-items:center;justify-content:center;gap:9px;font-size:13px;font-weight:700;transition:transform .15s,background .15s; }
+    .pill-button.accent { color:#0c251f;background:linear-gradient(130deg,#87efce,#69d9c4);border-color:transparent;box-shadow:0 7px 23px rgba(105,217,196,.13); }
+    .pill-button svg { width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round; }
+    .pill-button:disabled { opacity:.5;cursor:default; }
+    .share-row { display:flex; align-items:center; justify-content:center; margin:-4px 0 8px; }
+    .share-button { color:var(--muted); background:none; border:0; padding:9px 12px; border-radius:10px; font-size:12px; font-weight:700; }
+    .share-button:active { opacity:.7; }
+    .tg-note { display:none; color:var(--muted); font-size:11px; font-weight:600; margin-top:3px; }
+    .in-telegram .tg-note { display:block; }
+    /* A light Telegram client gets a light shell, while the gem colors stay recognizable. */
+    html.telegram-light { color-scheme:light; --bg:#f3f6fb; --panel:#fff; --panel-2:#e9eff9; --line:rgba(21,43,76,.13); --muted:#66788f; --text:#18263b; --accent:#087d77; --shadow:0 16px 40px rgba(44,62,96,.13); }
+    .telegram-light body { background:radial-gradient(ellipse at 18% -5%,rgba(155,137,241,.13),transparent 45%),radial-gradient(ellipse at 100% 75%,rgba(74,194,187,.12),transparent 48%),var(--bg); }
+    .telegram-light .score-card { background:rgba(255,255,255,.79); }
+    .telegram-light .score-card.primary { background:linear-gradient(135deg,rgba(35,172,151,.16),rgba(255,255,255,.9)); border-color:rgba(29,163,143,.23); }
+    .telegram-light .score-card.primary .score-value { color:#137f6c; }
+    .telegram-light .board-panel { background:linear-gradient(155deg,#fdfefe,#e4ebf7); border-color:rgba(27,56,93,.12); }
+    .telegram-light .board { background:linear-gradient(150deg,#dae4f3,#eff4fa);border-color:rgba(27,56,93,.13); }
+    .telegram-light .cell { background:rgba(255,255,255,.45); }
+    .telegram-light .board-caption span, .telegram-light .status { color:#536983; }
+    .telegram-light .guide { background:rgba(255,255,255,.76); }
+    .telegram-light .guide p { color:#657891; }
+    .telegram-light .icon-button { color:#2c4666; background:rgba(255,255,255,.75); }
+    .telegram-light .pill-button { background:rgba(255,255,255,.8); }
+    .telegram-light .pill-button.accent { color:#0c312a;background:linear-gradient(130deg,#8be8cf,#68d7c2); }
+    .telegram-light .footer { color:#8593a6; }
+    .telegram-light .modal { background:rgba(43,57,81,.45); }
+    .telegram-light .modal-card { background:linear-gradient(160deg,#ffffff,#edf2fa);border-color:rgba(26,53,89,.15); }
+    .telegram-light .modal-card p,.telegram-light .modal-score-label,.telegram-light .text-button { color:#5e7390; }
+    .telegram-light .modal-score { color:#138470; }
+    @media (prefers-reduced-motion:reduce) { .cell.is-hint .gem,.cell.pop .gem,.cell.shake .gem,.cell.fall .gem { animation:none; } }
+    .guide { border:1px solid var(--line);background:rgba(255,255,255,.03);border-radius:17px;padding:14px 16px;margin-top:16px; }
+    .guide-title {font-size:12px;font-weight:800;margin:0 0 7px;letter-spacing:.01em;}
+    .guide p {font-size:12px;color:#9ba8c2;line-height:1.55;margin:0;}
+    .footer {text-align:center;color:#61708c;font-size:10px;letter-spacing:.04em;margin:18px 0 0;}
+    .modal {position:fixed;inset:0;z-index:10;background:rgba(4,8,19,.78);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;padding:20px;}
+    .modal[hidden] {display:none;}
+    .modal-card { width:min(100%,400px);background:linear-gradient(160deg,#212c46,#131c32);border:1px solid rgba(255,255,255,.13);padding:26px 23px 22px;border-radius:24px;box-shadow:0 30px 90px rgba(0,0,0,.5);text-align:center; }
+    .modal-gem {font-size:45px;line-height:1.3;display:block;margin-bottom:12px;}
+    .modal-card h2 {margin:0 0 8px;font-size:25px;letter-spacing:-.03em;}
+    .modal-card p {margin:0 0 19px;color:#adb9d0;font-size:14px;line-height:1.55;}
+    .modal-score {font-size:40px;font-weight:850;letter-spacing:-.05em;color:#8cf3d5;font-variant-numeric:tabular-nums;line-height:1.1;margin-bottom:3px;}
+    .modal-score-label {font-size:12px;color:#9facca;margin-bottom:20px;}
+    .main-button {width:100%;border:0;border-radius:14px;padding:14px 18px;background:#85ebce;color:#10261f;font-weight:800;font-size:14px;transition:transform .15s;}
+    .text-button {display:block;width:100%;margin-top:8px;border:0;background:transparent;color:#b3c0d8;padding:11px;font-size:13px;}
+    @media (max-width:355px) { .page {width:calc(100% - 20px);} .score-card{padding:11px 9px;} .board-panel{padding:8px;} .board{gap:3px;} .brand-name{font-size:16px;} .intro{margin-top:24px;} }
+    @media (prefers-reduced-motion:reduce) { *,*::before,*::after {animation-duration:.001ms!important;transition-duration:.001ms!important;} }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <header class="topbar">
+      <div class="brand">
+        <div class="mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M7 3.5h10l4.2 5.7L12 21 2.8 9.2 7 3.5Z" fill="#DAF6FF"/><path d="m2.8 9.2 18.4 0M7 3.5l3.2 5.7L12 21l1.8-11.8L17 3.5" stroke="#8470E4" stroke-width="1.4" stroke-linejoin="round"/></svg>
+        </div>
+        <div><div class="brand-name">КАМНЕПАД</div><div class="brand-sub">gem puzzle · mini app</div><div class="tg-note" id="telegramNote">● Игра в Telegram</div></div>
+      </div>
+      <button class="icon-button" id="helpBtn" type="button" aria-label="Правила игры" title="Как играть">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.7 9a2.6 2.6 0 1 1 4 2.2c-1 .7-1.7 1.1-1.7 2.5M12 17h.01"/></svg>
+      </button>
+    </header>
+
+    <div class="intro">
+      <div><h1>Собирай комбо.<br>Бей рекорды.</h1><p class="subtitle">55 ходов. Продумывай комбинации.</p></div>
+      <button class="help-button" id="helpLink" type="button">Как играть?</button>
+    </div>
+
+    <section class="scores" aria-label="Статистика игры">
+      <div class="score-card primary"><div class="score-label">Счёт</div><div class="score-value" id="score">0</div></div>
+      <div class="score-card"><div class="score-label">Рекорд</div><div class="score-value" id="best">0</div></div>
+      <div class="score-card"><div class="score-label">Осталось</div><div class="score-value" id="moves">0</div></div>
+    </section>
+
+    <section class="board-panel" aria-label="Игровое поле">
+      <div class="board-caption"><span id="remaining">Раунд: 55 ходов</span><div class="progress" role="progressbar" aria-label="Оставшиеся ходы" aria-valuemin="0" aria-valuemax="55" aria-valuenow="55" id="progress"><span id="progressFill"></span></div></div>
+      <div id="board" class="board" role="group" aria-label="Поле 8 на 8"></div>
+      <div class="board-bottom"><span class="status" id="status" aria-live="polite">Найди группу из 3 и более камней</span><span class="combo-label" id="combo" aria-live="polite"></span></div>
+    </section>
+
+    <div class="toolbar">
+      <button class="pill-button" id="hintBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4M8.4 14.8C7 13.7 6 12.1 6 10a6 6 0 1 1 12 0c0 2.1-1 3.7-2.4 4.8-.7.6-1.1 1.2-1.1 2.2h-5c0-1-.4-1.6-1.1-2.2Z"/></svg>
+        <span id="hintLabel">Подсказка · 3</span>
+      </button>
+      <button class="pill-button accent" id="newBtn" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2.6 6.4M3 4v7h7"/></svg>
+        Новая игра
+      </button>
+    </div>
+
+    <div class="share-row"><button class="share-button" id="shareBtn" type="button">↗ Поделиться результатом</button></div>
+
+    <section class="guide"><h2 class="guide-title">КАК НАБРАТЬ БОЛЬШЕ ОЧКОВ?</h2><p>Собирай группы из 3 и более камней. Новые камни падают сверху после каждого хода, поэтому поле не заканчивается. На раунд даётся 55 ходов и 3 подсказки. Группы от 5 камней могут запустить комбо после падения. Старайся заранее готовить крупные группы.</p></section>
+    <p class="footer">Камнепад · 55 ходов · Mini App 3.1 · рекорд сохраняется</p>
+  </main>
+
+  <div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal-card">
+      <span class="modal-gem" id="modalIcon" aria-hidden="true">💎</span>
+      <h2 id="modalTitle">Игра окончена</h2>
+      <p id="modalText">Партия завершена.</p>
+      <div id="modalScoreWrap" hidden><div class="modal-score" id="modalScore">0</div><div class="modal-score-label">очков за партию</div></div>
+      <button class="main-button" id="modalPrimary" type="button">Новая игра</button>
+      <button class="text-button" id="modalSecondary" type="button">Закрыть</button>
+    </div>
+  </div>
+
+  <!-- The Telegram SDK is optional for standalone browser play. -->
+  <script>
+    (() => {
+      'use strict';
+      const SIZE = 8;
+      const TOTAL = SIZE * SIZE;
+      const COLORS = 5;
+      const MIN_GROUP = 3;
+      const CHAIN_THRESHOLD = 5;
+      const MAX_MOVES = 55;
+      const MAX_HINTS = 3;
+      const BEST_KEY = 'kamnepad_best_v1';
+      const SAVE_KEY = 'kamnepad_game_v3_long';
+      const TYPES = [
+        { name: 'бирюзовый', sign: '◆' },
+        { name: 'голубой', sign: '●' },
+        { name: 'фиолетовый', sign: '✦' },
+        { name: 'розовый', sign: '✚' },
+        { name: 'золотой', sign: '▲' }
+      ];
+      const $ = id => document.getElementById(id);
+      const boardEl = $('board');
+      const modal = $('modal');
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const sleep = ms => new Promise(resolve => window.setTimeout(resolve, reduceMotion ? 20 : ms));
+      let board = [];
+      let score = 0;
+      let moves = 0;
+      let hintsUsed = 0;
+      let best = readNumber(BEST_KEY);
+      let busy = false;
+      let finished = false;
+      let lastPreview = -1;
+      let hintTimeout = 0;
+      let statusTimeout = 0;
+      let modalMode = '';
+      let telegram = null;
+      let telegramActive = false;
+      let cloudReady = false;
+      let cloudWritePending = 0;
+      const CLOUD_BEST_KEY = 'kamnepad_best_v1';
+
+      function readNumber(key) {
+        try { const n = Number(localStorage.getItem(key)); return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0; }
+        catch (_) { return 0; }
+      }
+      function save() {
+        try { localStorage.setItem(SAVE_KEY, JSON.stringify({ board, score, moves, finished, hintsUsed })); }
+        catch (_) { /* Private modes may block storage; gameplay remains available. */ }
+      }
+      function load() {
+        try {
+          const saved = JSON.parse(localStorage.getItem(SAVE_KEY));
+          if (!saved || !Array.isArray(saved.board) || saved.board.length !== TOTAL) return false;
+          if (!saved.board.every(v => v === null || (Number.isInteger(v) && v >= 0 && v < COLORS))) return false;
+          if (!Number.isSafeInteger(saved.score) || saved.score < 0 || !Number.isSafeInteger(saved.moves) || saved.moves < 0 || saved.moves > MAX_MOVES || !Number.isInteger(saved.hintsUsed) || saved.hintsUsed < 0 || saved.hintsUsed > MAX_HINTS) return false;
+          board = saved.board; score = saved.score; moves = saved.moves; hintsUsed = saved.hintsUsed; finished = !!saved.finished;
+          return true;
+        } catch (_) { return false; }
+      }
+      function syncBestToCloud() {
+        if (!cloudReady || !telegram?.CloudStorage) return;
+        clearTimeout(cloudWritePending);
+        cloudWritePending = setTimeout(() => {
+          try { telegram.CloudStorage.setItem(CLOUD_BEST_KEY, String(best), () => {}); }
+          catch (_) { /* Cloud storage is optional. */ }
+        }, 250);
+      }
+      function updateBest() {
+        if (score > best) {
+          best = score;
+          try { localStorage.setItem(BEST_KEY, String(best)); } catch (_) {}
+          syncBestToCloud();
+        }
+      }
+      function neighbors(i) {
+        const r = Math.floor(i / SIZE), c = i % SIZE, a = [];
+        if (r > 0) a.push(i - SIZE);
+        if (r < SIZE - 1) a.push(i + SIZE);
+        if (c > 0) a.push(i - 1);
+        if (c < SIZE - 1) a.push(i + 1);
+        return a;
+      }
+      function groupAt(start, used = new Set()) {
+        const color = board[start];
+        if (color == null || used.has(start)) return [];
+        const group = [], queue = [start];
+        used.add(start);
+        for (let n = 0; n < queue.length; n++) {
+          const i = queue[n]; group.push(i);
+          for (const j of neighbors(i)) {
+            if (!used.has(j) && board[j] === color) { used.add(j); queue.push(j); }
+          }
+        }
+        return group;
+      }
+      function allGroups() {
+        const visited = new Set(), groups = [];
+        for (let i = 0; i < TOTAL; i++) {
+          if (board[i] === null || visited.has(i)) continue;
+          groups.push(groupAt(i, visited));
+        }
+        return groups;
+      }
+      function hasMoves() { return allGroups().some(g => g.length >= MIN_GROUP); }
+      function generateBoard() {
+        let result;
+        do {
+          result = Array.from({ length: TOTAL }, () => Math.floor(Math.random() * COLORS));
+          board = result;
+        } while (allGroups().filter(g => g.length >= MIN_GROUP).length < 5 || !allGroups().some(g => g.length >= 4));
+        return result;
+      }
+      function render(falling = null) {
+        const html = board.map((value, i) => {
+          if (value === null) return '<div class="cell" aria-hidden="true"></div>';
+          const type = TYPES[value];
+          return `<button class="cell${falling && falling.has(i) ? ' fall' : ''}" data-i="${i}" type="button" aria-label="${type.name} камень, ряд ${Math.floor(i / SIZE) + 1}, столбец ${i % SIZE + 1}"><span class="gem c${value}"><span class="gem-symbol" aria-hidden="true">${type.sign}</span></span></button>`;
+        }).join('');
+        boardEl.innerHTML = html;
+        $('score').textContent = score.toLocaleString('ru-RU');
+        $('best').textContent = best.toLocaleString('ru-RU');
+        $('moves').textContent = (MAX_MOVES - moves).toLocaleString('ru-RU');
+        const remaining = MAX_MOVES - moves;
+        $('remaining').textContent = `Ход ${moves} из ${MAX_MOVES} · новые камни падают сверху`;
+        $('progressFill').style.width = `${remaining / MAX_MOVES * 100}%`;
+        $('progress').setAttribute('aria-valuemax', String(MAX_MOVES));
+        $('progress').setAttribute('aria-valuenow', String(remaining));
+        $('hintBtn').disabled = busy || finished || hintsUsed >= MAX_HINTS;
+        $('hintLabel').textContent = `Подсказка · ${MAX_HINTS - hintsUsed}`;
+        lastPreview = -1;
+      }
+      function vibrate(type = 'light') {
+        if (!telegramActive) return;
+        try { telegram?.HapticFeedback?.impactOccurred(type); } catch (_) {}
+      }
+      function setStatus(text, timeout = 0) {
+        clearTimeout(statusTimeout);
+        $('status').textContent = text;
+        if (timeout) statusTimeout = setTimeout(() => $('status').textContent = 'Найди группу из 3 и более камней', timeout);
+      }
+      function clearHighlights() {
+        boardEl.querySelectorAll('.is-preview, .is-hint').forEach(el => el.classList.remove('is-preview', 'is-hint'));
+      }
+      function preview(index) {
+        if (busy || finished || index === lastPreview) return;
+        lastPreview = index;
+        clearHighlights();
+        const group = groupAt(index);
+        if (group.length >= MIN_GROUP) group.forEach(i => boardEl.querySelector(`[data-i="${i}"]`)?.classList.add('is-preview'));
+      }
+      function gravity() {
+        const moved = new Set();
+        for (let c = 0; c < SIZE; c++) {
+          let write = SIZE - 1;
+          for (let r = SIZE - 1; r >= 0; r--) {
+            const from = r * SIZE + c;
+            if (board[from] === null) continue;
+            const to = write * SIZE + c;
+            if (to !== from) {
+              board[to] = board[from];
+              board[from] = null;
+              moved.add(to);
+            }
+            write--;
+          }
+          while (write >= 0) { board[write * SIZE + c] = null; write--; }
+        }
+        return moved;
+      }
+      function replenish() {
+        // Only new gaps are filled. Refilling happens once, after cascades,
+        // so newly spawned random groups never disappear without a player action.
+        const spawned = new Set();
+        for (let i = 0; i < TOTAL; i++) {
+          if (board[i] === null) {
+            board[i] = Math.floor(Math.random() * COLORS);
+            spawned.add(i);
+          }
+        }
+        return spawned;
+      }
+      function prepareNextMove() {
+        // The board must offer a meaningful choice. Shuffling is automatic
+        // and free when there are fewer than two available groups.
+        if (allGroups().filter(g => g.length >= MIN_GROUP).length >= 2) return false;
+        const original = board.slice();
+        for (let tries = 0; tries < 100; tries++) {
+          const bag = original.slice();
+          for (let j = TOTAL - 1; j > 0; j--) {
+            const k = Math.floor(Math.random() * (j + 1));
+            [bag[j], bag[k]] = [bag[k], bag[j]];
+          }
+          board = bag;
+          if (allGroups().filter(g => g.length >= MIN_GROUP).length >= 2) return true;
+        }
+        generateBoard();
+        return true;
+      }
+      function award(groups, chainLevel) {
+        // Larger groups are disproportionately valuable. Each cascade adds a multiplier.
+        const earned = groups.reduce((sum, g) => sum + g.length * g.length * 10 * (chainLevel + 1), 0);
+        score += earned;
+        updateBest();
+        renderStatsOnly();
+        return earned;
+      }
+      function renderStatsOnly() {
+        $('score').textContent = score.toLocaleString('ru-RU');
+        $('best').textContent = best.toLocaleString('ru-RU');
+        $('moves').textContent = (MAX_MOVES - moves).toLocaleString('ru-RU');
+      }
+      async function animateRemoval(indices) {
+        indices.forEach(i => boardEl.querySelector(`[data-i="${i}"]`)?.classList.add('pop'));
+        await sleep(220);
+        indices.forEach(i => { board[i] = null; });
+      }
+      async function play(index) {
+        if (busy || finished || modalMode) return;
+        if (!Number.isInteger(index) || index < 0 || index >= TOTAL || board[index] === null) return;
+        const chosen = groupAt(index);
+        if (chosen.length < MIN_GROUP) {
+          vibrate('light');
+          const cell = boardEl.querySelector(`[data-i="${index}"]`);
+          cell?.classList.add('shake');
+          setTimeout(() => cell?.classList.remove('shake'), 220);
+          setStatus('Нужно минимум 3 соседних камня одного цвета', 1900);
+          return;
+        }
+        busy = true;
+        $('hintBtn').disabled = true;
+        clearTimeout(hintTimeout);
+        clearHighlights();
+        moves++;
+        vibrate('medium');
+        award([chosen], 0);
+        $('combo').textContent = `+${(chosen.length ** 2 * 10).toLocaleString('ru-RU')}`;
+        setStatus(`Удалена группа: ${chosen.length} камн.`);
+        await animateRemoval(chosen);
+        let moved = gravity();
+        render(moved);
+        await sleep(190);
+
+        let chainLevel = 0;
+        // Only groups touched by falling stones can auto-clear, avoiding arbitrary distant removals.
+        while (chainLevel < 12) {
+          const chains = allGroups().filter(g => g.length >= CHAIN_THRESHOLD && g.some(i => moved.has(i)));
+          if (!chains.length) break;
+          chainLevel++;
+          const earned = award(chains, chainLevel);
+          $('combo').textContent = `КОМБО ×${chainLevel + 1}  +${earned.toLocaleString('ru-RU')}`;
+          setStatus(`Цепная реакция! Уровень ${chainLevel}`);
+          vibrate('light');
+          await animateRemoval(chains.flat());
+          moved = gravity();
+          render(moved);
+          await sleep(210);
+        }
+
+        finished = moves >= MAX_MOVES;
+        let shuffled = false;
+        if (!finished) {
+          replenish();
+          shuffled = prepareNextMove();
+        }
+        busy = false;
+        render();
+        save();
+        $('combo').textContent = chainLevel ? `Серия комбо: ${chainLevel}` : '';
+        setStatus(finished ? 'Раунд завершён: 55 ходов' : shuffled ? 'Нет подходящих групп — поле перемешано!' : 'Новые камни! Ищи следующую комбинацию');
+        if (finished) showModal('finish');
+      }
+      function hint() {
+        if (busy || finished || modalMode || hintsUsed >= MAX_HINTS) return;
+        clearHighlights();
+        clearTimeout(hintTimeout);
+        const groups = allGroups().filter(g => g.length >= MIN_GROUP);
+        groups.sort((a, b) => b.length - a.length);
+        const top = groups[0];
+        if (!top) { setStatus('Нет доступных групп'); return; }
+        hintsUsed++;
+        $('hintLabel').textContent = `Подсказка · ${MAX_HINTS - hintsUsed}`;
+        $('hintBtn').disabled = hintsUsed >= MAX_HINTS;
+        save();
+        top.forEach(i => boardEl.querySelector(`[data-i="${i}"]`)?.classList.add('is-hint'));
+        setStatus(`Подсказка: группа из ${top.length} камней`, 2100);
+        hintTimeout = setTimeout(clearHighlights, 2100);
+        vibrate('light');
+      }
+      function startGame() {
+        closeModal();
+        busy = false;
+        finished = false;
+        clearTimeout(hintTimeout);
+        generateBoard();
+        score = 0;
+        moves = 0;
+        hintsUsed = 0;
+        render();
+        $('combo').textContent = '';
+        setStatus('Найди группу из 3 и более камней');
+        save();
+      }
+      function showModal(mode) {
+        modalMode = mode;
+        const data = {
+          finish: {icon:'🏆',title:'Раунд завершён!',text:'55 ходов позади. Камни пополнялись после каждой комбинации — попробуй побить свой рекорд в следующем раунде!',primary:'Играть снова',secondary:'Посмотреть поле',score:true},
+          rules: {icon:'🧩',title:'Как играть',text:'У тебя 55 ходов на раунд. Удаляй группы минимум из трёх одинаковых камней, соприкасающихся сторонами. После удаления остальные падают вниз, а пустые клетки заполняются новыми камнями. Цепочки из пяти и более дают комбо. Всего три подсказки на раунд. Если подходящих ходов мало, поле автоматически перемешается.',primary:'Понятно, играем',secondary:'Закрыть',score:false},
+          restart: {icon:'🔄',title:'Начать сначала?',text:'Текущая партия завершится без сохранения её счёта, но личный рекорд останется.',primary:'Начать новую',secondary:'Продолжить партию',score:false}
+        }[mode];
+        if (!data) return;
+        $('modalIcon').textContent = data.icon;
+        $('modalTitle').textContent = data.title;
+        $('modalText').textContent = data.text;
+        $('modalPrimary').textContent = data.primary;
+        $('modalSecondary').textContent = data.secondary;
+        $('modalScoreWrap').hidden = !data.score;
+        $('modalScore').textContent = score.toLocaleString('ru-RU');
+        modal.hidden = false;
+        if (telegramActive) { try { telegram.BackButton?.show(); } catch (_) {} }
+        $('modalPrimary').focus();
+      }
+      function closeModal() {
+        modal.hidden = true; modalMode = '';
+        if (telegramActive) { try { telegram.BackButton?.hide(); } catch (_) {} }
+      }
+      function requestNew() {
+        if (busy) return;
+        if (!finished && moves > 0) showModal('restart'); else startGame();
+      }
+      function applyTelegramAppearance() {
+        if (!telegramActive || !telegram) return;
+        const light = telegram.colorScheme === 'light';
+        document.documentElement.classList.toggle('telegram-light', light);
+        const color = light ? '#f3f6fb' : '#0b1020';
+        try { telegram.setBackgroundColor(color); } catch (_) {}
+        try { telegram.setHeaderColor(color); } catch (_) {}
+        const meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.content = color;
+      }
+      function initCloudBest() {
+        if (!telegramActive || !telegram?.CloudStorage) return;
+        try {
+          telegram.CloudStorage.getItem(CLOUD_BEST_KEY, (error, value) => {
+            if (error) return;
+            const n = Number(value);
+            if (value && Number.isSafeInteger(n) && n >= 0 && n > best) {
+              best = n;
+              try { localStorage.setItem(BEST_KEY, String(best)); } catch (_) {}
+              renderStatsOnly();
+            }
+            cloudReady = true;
+            // Send the local best if it was higher than the stored cloud best.
+            if (!value || (Number.isFinite(n) && best > n)) syncBestToCloud();
+          });
+        } catch (_) { /* Some Telegram clients do not support this API. */ }
+      }
+      function connectTelegram() {
+        const webapp = window.Telegram?.WebApp;
+        // The script can also load in a normal browser: no Telegram user data there.
+        if (!webapp || typeof webapp.initData !== 'string' || !webapp.initData) return;
+        telegram = webapp;
+        telegramActive = true;
+        document.documentElement.classList.add('in-telegram');
+        try { telegram.ready(); } catch (_) {}
+        try { telegram.expand(); } catch (_) {}
+        try { telegram.disableVerticalSwipes?.(); } catch (_) {}
+        try { telegram.BackButton?.onClick(() => { if (modalMode) closeModal(); }); } catch (_) {}
+        try { telegram.onEvent('themeChanged', applyTelegramAppearance); } catch (_) {}
+        applyTelegramAppearance();
+        initCloudBest();
+      }
+      async function shareResult() {
+        const title = 'Камнепад';
+        const text = `💎 Камнепад: ${score.toLocaleString('ru-RU')} очков за ${moves} ходов! Можешь побить мой результат?`;
+        const isWebUrl = location.protocol === 'https:' || location.protocol === 'http:';
+        // A deployed HTTPS URL can be shared; local file:// URLs cannot.
+        const url = isWebUrl ? location.origin + location.pathname : '';
+        if (navigator.share) {
+          try { await navigator.share({title, text, ...(url ? {url} : {})}); return; }
+          catch (e) { if (e?.name === 'AbortError') return; }
+        }
+        if (telegramActive && url) {
+          try {
+            const link = 'https://t.me/share/url?url=' + encodeURIComponent(url) + '&text=' + encodeURIComponent(text);
+            telegram.openTelegramLink(link);
+            return;
+          } catch (_) {}
+        }
+        try {
+          await navigator.clipboard.writeText(text + (url ? '\n' + url : ''));
+          setStatus('Результат скопирован — отправь другу!', 2500);
+        } catch (_) { setStatus('В Telegram можно поделиться результатом после публикации игры', 3000); }
+      }
+      function init() {
+        if (!load()) startGame();
+        else {
+          updateBest();
+          if (!finished && moves < MAX_MOVES && prepareNextMove()) save();
+          if (moves >= MAX_MOVES) { finished = true; save(); }
+          render();
+          setStatus(finished ? 'Партия завершена. Начни новую игру.' : 'Продолжай свою партию');
+        }
+        boardEl.addEventListener('click', event => {
+          const b = event.target.closest('button[data-i]');
+          if (b && boardEl.contains(b)) play(Number(b.dataset.i));
+        });
+        boardEl.addEventListener('pointerover', event => {
+          if (event.pointerType === 'touch') return;
+          const b = event.target.closest('button[data-i]');
+          if (b && boardEl.contains(b)) preview(Number(b.dataset.i));
+        });
+        boardEl.addEventListener('pointerleave', () => { lastPreview = -1; if (!busy) clearHighlights(); });
+        $('hintBtn').addEventListener('click', hint);
+        $('shareBtn').addEventListener('click', shareResult);
+        $('newBtn').addEventListener('click', requestNew);
+        $('helpBtn').addEventListener('click', () => showModal('rules'));
+        $('helpLink').addEventListener('click', () => showModal('rules'));
+        $('modalPrimary').addEventListener('click', () => {
+          if (modalMode === 'restart' || modalMode === 'finish') startGame();
+          else closeModal();
+        });
+        $('modalSecondary').addEventListener('click', closeModal);
+        document.addEventListener('keydown', event => {
+          if (event.key === 'Escape' && modalMode) closeModal();
+          if (event.key.toLowerCase() === 'h' && !modalMode) hint();
+          if (event.key.toLowerCase() === 'n' && !modalMode) requestNew();
+        });
+      }
+      init();
+      // Optional Telegram bridge: SDK failure must never block the game.
+      // This script is inserted asynchronously to preserve standalone and offline mode.
+      if (location.protocol === 'https:' || location.protocol === 'http:') {
+        const telegramSDK = document.createElement('script');
+        telegramSDK.src = 'https://telegram.org/js/telegram-web-app.js?64';
+        telegramSDK.async = true;
+        telegramSDK.onload = connectTelegram;
+        telegramSDK.onerror = () => { /* Offline/browser mode is fully playable. */ };
+        document.head.appendChild(telegramSDK);
+      }
+    })();
+  </script>
+</body>
+</html>
